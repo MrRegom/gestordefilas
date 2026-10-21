@@ -6,6 +6,8 @@ Jerarquía multi-unidad:
 Los tickets guardan su estado actual; cada cambio de estado queda además en
 EventoTicket, que es de solo inserción y es la fuente de la trazabilidad.
 """
+import secrets
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -100,12 +102,19 @@ class Puesto(models.Model):
         return f"{self.unidad} / {self.nombre}"
 
 
+def generar_token():
+    return secrets.token_urlsafe(32)
+
+
 class Totem(models.Model):
     unidad = models.ForeignKey(Unidad, on_delete=models.PROTECT, related_name="totems")
     nombre = models.CharField(max_length=100)
     servicios = models.ManyToManyField(Servicio, related_name="totems", blank=True)
     impresora = models.CharField(max_length=100, default="POS80 Printer", help_text="Nombre de la impresora en Windows.")
+    token = models.CharField(max_length=64, unique=True, default=generar_token, editable=False)
     activo = models.BooleanField(default=True)
+    ultimo_contacto = models.DateTimeField(null=True, blank=True)
+    estado_impresora = models.CharField(max_length=100, blank=True, help_text="Último estado informado por el agente.")
 
     class Meta:
         ordering = ["unidad", "nombre"]

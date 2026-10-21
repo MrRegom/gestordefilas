@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tótem</title>
+<style>
+  :root { --azul: #1f3c73; --azul-claro: #2f5fae; --fondo: #f3f6fb; --texto: #14213d; --ok: #1d7a46; --error: #b3261e; }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body { font-family: system-ui, "Segoe UI", Roboto, sans-serif; background: var(--fondo); color: var(--texto);
+         display: flex; flex-direction: column; user-select: none; -webkit-user-select: none; overflow: hidden; }
+  header { background: var(--azul); color: #fff; padding: 4vh 5vw 3vh; text-align: center; }
+  header h1 { font-size: clamp(1.6rem, 4.5vw, 3.2rem); }
+  header p { font-size: clamp(1.1rem, 3vw, 2rem); opacity: .85; margin-top: .5vh; }
+  main { flex: 1; display: flex; flex-direction: column; padding: 3vh 5vw; gap: 2.2vh; overflow-y: auto; }
+  .instruccion { text-align: center; font-size: clamp(1.2rem, 3.4vw, 2.4rem); font-weight: 600; }
+  button { font: inherit; border: none; cursor: pointer; touch-action: manipulation; }
+  .servicio { background: #fff; color: var(--azul); border: 3px solid var(--azul-claro); border-radius: 22px;
+              padding: 3.2vh 4vw; font-size: clamp(1.4rem, 4.4vw, 3rem); font-weight: 700; text-align: left;
+              display: flex; align-items: center; gap: 4vw; box-shadow: 0 4px 10px rgba(0,0,0,.08); }
+  .servicio .letra { background: var(--azul-claro); color: #fff; border-radius: 14px; min-width: 2.4em;
+                     padding: .3em .5em; text-align: center; }
+  .servicio:active { transform: scale(.98); background: #e8eefb; }
+  .preferente { align-self: center; margin-top: 1vh; background: #fff; border: 3px dashed #8a5a00; color: #8a5a00;
+                border-radius: 999px; padding: 1.6vh 5vw; font-size: clamp(1.1rem, 3.2vw, 2.2rem); font-weight: 600; }
+  .preferente[aria-pressed="true"] { background: #8a5a00; color: #fff; border-style: solid; }
+  .capa { position: fixed; inset: 0; background: rgba(20,33,61,.92); color: #fff; display: none;
+          flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 6vw; gap: 3vh; }
+  .capa.visible { display: flex; }
+  .capa .numero { font-size: clamp(5rem, 22vw, 14rem); font-weight: 800; line-height: 1; }
+  .capa .grande { font-size: clamp(1.6rem, 5vw, 3.4rem); font-weight: 700; }
+  .capa .chico { font-size: clamp(1.1rem, 3.2vw, 2.2rem); opacity: .9; }
+  .capa.error { background: rgba(120,20,15,.95); }
+  footer { text-align: center; padding: 1.2vh; font-size: .9rem; color: #66708a; }
+  #conexion.mal { color: var(--error); font-weight: 700; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="establecimiento">Cargando…</h1>
+  <p id="unidad"></p>
+</header>
+<main>
+  <p class="instruccion">Toque el servicio que necesita</p>
+  <div id="servicios" style="display:flex;flex-direction:column;gap:2.2vh"></div>
+  <button id="preferente" class="preferente" aria-pressed="false">♿ Atención preferente</button>
+</main>
+<footer><span id="conexion">Conectando…</span></footer>
+
+<div id="capa" class="capa" role="alert" aria-live="assertive">
+  <p class="grande" id="capa-titulo"></p>
+  <p class="numero" id="capa-numero"></p>
+  <p class="chico" id="capa-detalle"></p>
+</div>
+
+<script>
+"use strict";
+const TOKEN = decodeURIComponent(location.hash.slice(1));
+const AGENTE = "http://127.0.0.1:8765";
+const SEGUNDOS_CAPA = 6;
+let config = null, ocupado = false, preferente = false;
+
+const $ = (id) => document.getElementById(id);
+
+async function api(ruta, opciones = {}) {
+  const r = await fetch(ruta, {
+    ...opciones,
+    headers: { "Content-Type": "application/json", "Authorization": "Totem " + TOKEN, ...(opciones.headers || {}) },
+  });
+  const datos = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(datos.detalle || datos.detail || datos.servicio || "Error " + r.status);
+  return datos;
+}
+
+function conexion(ok, texto) {
+  $("conexion").textContent = texto;
+  $("conexion").className = ok ? "" : "mal";
+}
+
+function mostrarCapa({ titulo, numero = "", detalle = "", error = false }) {
+  $("capa-titulo").textContent = titulo;
+  $("capa-numero").textContent = numero;
+  $("capa-detalle").textContent = detalle;
+  $("capa").className = "capa visible" + (error ? " error" : "");
+  clearTimeout(mostrarCapa.t);
+  mostrarCapa.t = setTimeout(() => { $("capa").className = "capa"; ocupado = false; }, SEGUNDOS_CAPA * 1000);
+}
+
+function dibujar() {
+  $("establecimiento").textContent = config.establecimiento;
+  $("unidad").textContent = config.unidad;
+  const cont = $("servicios");
+  cont.replaceChildren();
+  for (const s of config.servicios) {
+    const b = document.createElement("button");
+    b.className = "servicio";
+    const letra = document.createElement("span");
+    letra.className = "letra";
+    letra.textContent = s.letra;
+    b.append(letra, document.createTextNode(s.nombre));
+    b.addEventListener("click", () => sacarNumero(s));
+    cont.append(b);
+  }
+}
+
+async function cargar() {
+  try {
+    config = await api("/api/totem/config/");
+    dibujar();
+    conexion(true, config.totem);
+  } catch (e) {
+    conexion(false, "Sin conexión con el servidor. Reintentando…");
+    setTimeout(cargar, 5000);
+  }
+}
+
+async function imprimir(ticket) {
+  const r = await fetch(AGENTE + "/imprimir", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(ticket),
+  });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "Impresora no responde");
+}
+
+async function sacarNumero(servicio) {
+  if (ocupado) return;
+  ocupado = true;
+  mostrarCapa({ titulo: "Generando su número…" });
+  let ticket;
+  try {
+    ticket = await api("/api/totem/tickets/", {
+      method: "POST",
+      body: JSON.stringify({ servicio: servicio.id, preferente }),
+    });
+  } catch (e) {
+    mostrarCapa({ titulo: "No pudimos generar su número", detalle: e.message + ". Por favor avise al personal.", error: true });
+    return;
+  }
+  setPreferente(false);
+  const espera = ticket.personas_delante === 0 ? "Usted es el siguiente" :
+    `Personas antes que usted: ${ticket.personas_delante}`;
+  try {
+    await imprimir(ticket);
+    mostrarCapa({ titulo: "Retire su número", numero: ticket.codigo, detalle: `${ticket.servicio} · ${espera}` });
+  } catch (e) {
+    // El ticket ya existe: se muestra en pantalla para que el paciente lo anote.
+    mostrarCapa({ titulo: "Anote su número (no se pudo imprimir)", numero: ticket.codigo,
+                  detalle: `${ticket.servicio} · ${espera}`, error: true });
+    latido();
+  }
+}
+
+function setPreferente(valor) {
+  preferente = valor;
+  $("preferente").setAttribute("aria-pressed", String(valor));
+}
+$("preferente").addEventListener("click", () => setPreferente(!preferente));
+
+async function latido() {
+  let estado;
+  try {
+    const r = await fetch(AGENTE + "/estado");
+    estado = (await r.json()).estado || "desconocido";
+  } catch (e) {
+    estado = "agente de impresión no responde";
+  }
+  try {
+    await api("/api/totem/latido/", { method: "POST", body: JSON.stringify({ estado_impresora: estado }) });
+    if (config) conexion(true, `${config.totem} · impresora: ${estado}`);
+  } catch (e) {
+    conexion(false, "Sin conexión con el servidor");
+  }
+}
+
+document.addEventListener("contextmenu", (e) => e.preventDefault());
+if (!TOKEN) {
+  conexion(false, "Falta el token del tótem en la URL (/totem/#TOKEN)");
+} else {
+  cargar();
+  latido();
+  setInterval(latido, 60000);
+  // Recarga diaria de madrugada para liberar memoria en equipos antiguos.
+  setInterval(() => { if (new Date().getHours() === 4 && !ocupado) location.reload(); }, 3600000);
+}
+</script>
+</body>
+</html>

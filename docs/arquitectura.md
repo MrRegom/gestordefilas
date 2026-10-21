@@ -70,8 +70,8 @@ Establecimiento (Hospital Fricke; a futuro otros del Servicio de Salud)
 | Etapa | Entregable |
 |---|---|
 | 0 ✅ | Prueba de impresión ESC/POS en tótem POS80 (`herramientas/prueba_impresora`) |
-| 1 | Núcleo: modelo multi-unidad, servicios, tickets, eventos, numeración, admin |
-| 2 | Tótem + agente de impresión |
+| 1 ✅ | Núcleo: modelo multi-unidad, servicios, tickets, eventos, numeración, admin |
+| 2 ✅ | Tótem + agente de impresión |
 | 3 | Puesto del funcionario |
 | 4 | Pantalla TV en tiempo real con voz |
 | 5 | Piloto en una unidad (p. ej. Toma de Muestras) |

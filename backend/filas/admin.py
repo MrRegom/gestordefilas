@@ -39,8 +39,13 @@ class PuestoAdmin(EnUnidadAdmin):
 
 @admin.register(models.Totem)
 class TotemAdmin(EnUnidadAdmin):
-    list_display = ["nombre", "unidad", "impresora", "activo"]
+    list_display = ["nombre", "unidad", "impresora", "estado_impresora", "ultimo_contacto", "activo"]
     filter_horizontal = ["servicios"]
+    readonly_fields = ["url_totem", "ultimo_contacto", "estado_impresora"]
+
+    @admin.display(description="URL para abrir en el tótem")
+    def url_totem(self, obj):
+        return f"/totem/#{obj.token}" if obj.pk else "Se genera al guardar."
 
 
 @admin.register(models.Pantalla)

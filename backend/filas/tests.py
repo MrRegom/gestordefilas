@@ -131,3 +131,49 @@ class EventoInmutableTests(BaseFilas):
             evento.save()
         with self.assertRaises(ValidationError):
             evento.delete()
+
+
+class ApiTotemTests(BaseFilas):
+    def setUp(self):
+        super().setUp()
+        from .models import Totem
+
+        self.totem = Totem.objects.create(unidad=self.farmacia, nombre="Tótem 1")
+        self.totem.servicios.set([self.medicamentos])
+        self.auth = {"HTTP_AUTHORIZATION": f"Totem {self.totem.token}"}
+
+    def test_sin_token_rechaza(self):
+        self.assertEqual(self.client.get("/api/totem/config/").status_code, 401)
+        r = self.client.get("/api/totem/config/", HTTP_AUTHORIZATION="Totem malo")
+        self.assertEqual(r.status_code, 401)
+
+    def test_config_lista_solo_servicios_del_totem(self):
+        r = self.client.get("/api/totem/config/", **self.auth)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual([s["letra"] for s in r.json()["servicios"]], ["M"])
+        self.totem.refresh_from_db()
+        self.assertIsNotNone(self.totem.ultimo_contacto)
+
+    def test_emitir_ticket(self):
+        op.emitir_ticket(self.medicamentos)
+        r = self.client.post("/api/totem/tickets/", {"servicio": self.medicamentos.pk, "preferente": True},
+                             content_type="application/json", **self.auth)
+        self.assertEqual(r.status_code, 201)
+        datos = r.json()
+        self.assertEqual((datos["codigo"], datos["preferente"], datos["personas_delante"]), ("M-002", True, 1))
+        self.assertEqual(Ticket.objects.get(pk=datos["id"]).totem, self.totem)
+
+    def test_no_emite_servicio_ajeno(self):
+        r = self.client.post("/api/totem/tickets/", {"servicio": self.preferencial.pk},
+                             content_type="application/json", **self.auth)
+        self.assertEqual(r.status_code, 400)
+
+    def test_latido_guarda_estado_impresora(self):
+        r = self.client.post("/api/totem/latido/", {"estado_impresora": "sin papel"},
+                             content_type="application/json", **self.auth)
+        self.assertEqual(r.status_code, 200)
+        self.totem.refresh_from_db()
+        self.assertEqual(self.totem.estado_impresora, "sin papel")
+
+    def test_pagina_totem(self):
+        self.assertContains(self.client.get("/totem/"), "Toque el servicio")
