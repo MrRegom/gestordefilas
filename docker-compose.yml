@@ -1,0 +1,35 @@
+# Despliegue de gestorfilas en un servidor del hospital.
+#   cp .env.ejemplo .env   (editar contraseñas)
+#   docker compose up -d --build
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: gestorfilas
+      POSTGRES_USER: gestorfilas
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?definir en .env}
+    volumes:
+      - datos_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gestorfilas"]
+      interval: 5s
+      retries: 10
+
+  web:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      POSTGRES_DB: gestorfilas
+      POSTGRES_USER: gestorfilas
+      POSTGRES_HOST: db
+      DJANGO_DEBUG: "0"
+    ports:
+      - "${PUERTO:-80}:8000"
+
+volumes:
+  datos_postgres:
