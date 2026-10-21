@@ -21,7 +21,7 @@ CENTRO = ESC + b"a\x01"
 IZQUIERDA = ESC + b"a\x00"
 NEGRITA_ON, NEGRITA_OFF = ESC + b"E\x01", ESC + b"E\x00"
 TAMANO_NORMAL = GS + b"!\x00"
-TAMANO_DOBLE = GS + b"!\x11"
+TAMANO_ALTO = GS + b"!\x01"  # doble alto, ancho normal (cabe en 80 mm)
 TAMANO_GRANDE = GS + b"!\x33"
 CORTE_PARCIAL = GS + b"V\x42\x00"
 
@@ -46,7 +46,7 @@ def armar_ticket(numero, servicio, url_qr):
     ahora = datetime.now().strftime("%d-%m-%Y %H:%M")
     return b"".join([
         INICIAR, TABLA_PC850, CENTRO,
-        NEGRITA_ON, TAMANO_DOBLE, texto("Hospital Dr. Gustavo Fricke\n"), NEGRITA_OFF,
+        NEGRITA_ON, TAMANO_ALTO, texto("Hospital Dr. Gustavo Fricke\n"), NEGRITA_OFF,
         TAMANO_NORMAL, texto("Viña del Mar\n\n"),
         texto(f"{servicio}\n"),
         TAMANO_GRANDE, NEGRITA_ON, texto(f"{numero}\n"), NEGRITA_OFF, TAMANO_NORMAL,
